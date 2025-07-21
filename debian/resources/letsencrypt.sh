@@ -46,14 +46,17 @@ if [ .$acme_challenge_type = ."dns-01" ]; then
 
 	# Source env file containing dns-01 challenge secrets
 	. $letsencrypt_env_file
+	verbose "Requesting certificate for $domain_name"
 	~/.acme.sh/acme.sh --issue --dns dns_$acme_dns_provider -d $domain_name
 
+	verbose "Installing certificate for $domain_name to nginx"
 	~/.acme.sh/acme.sh --install-cert -d $domain_name \
 		--key-file       /etc/ssl/private/nginx.key \
 		--fullchain-file /etc/ssl/certs/nginx.crt \
 		--reloadcmd     "/usr/sbin/nginx -t && /usr/sbin/nginx -s reload"
 
 	if [ .$switch_tls = ."true" ]; then
+		verbose "Installing certificate for $domain_name to freeswitch"
 		~/.acme.sh/acme.sh --install-cert -d $domain_name \
 			--key-file       /etc/freeswitch/tls/privkey.pem \
 			--cert-file		 /etc/freeswitch/tls/cert.pem \
