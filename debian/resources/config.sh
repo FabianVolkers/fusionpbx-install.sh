@@ -36,3 +36,7 @@ application_device_logs=true               # Log device provision requests
 application_dialplan_tools=true           # Add additional dialplan applications
 application_edit=false                     # Editor for XML, Provision, Scripts, and PHP
 application_sip_trunks=false               # Registration-based SIP trunks
+
+# letsencrypt
+acme_challenge_type=http-01                 # http-01 or dns-01
+acme_dns_provider=                          # list of supported providers https://github.com/acmesh-official/acme.sh/wiki/dnsapi
