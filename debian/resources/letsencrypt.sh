@@ -54,8 +54,6 @@ if [ .$acme_challenge_type = ."dns-01" ]; then
 		--reloadcmd     "/usr/sbin/nginx -s reload"
 
 	if [ .$switch_tls = ."true" ]; then
-		~/.acme.sh/acme.sh --issue --dns dns_$acme_dns_provider -d $domain_name
-
 		~/.acme.sh/acme.sh --install-cert -d $domain_name \
 			--key-file       /etc/freeswitch/tls/privkey.pem \
 			--cert-file		 /etc/freeswitch/tls/cert.pem \
@@ -76,8 +74,6 @@ elif [ .$wildcard_domain = ."true" && .$acme_challenge_type = ."http-01" ]; then
 
 
 	if [ .$switch_tls = ."true" ]; then
-		~/.acme.sh/acme.sh  --issue --dns -d $domain_name
-		~/.acme.sh/acme.sh --renew -d $domain_name
 
 		~/.acme.sh/acme.sh  --install-cert -d $domain_name \
 			--key-file       /etc/freeswitch/tls/privkey.pem \
@@ -96,7 +92,6 @@ elif [ .$acme_challenge_type = ."http-01" ]; then
 		--reloadcmd     "/usr/sbin/nginx -s reload"
 
 	if [ .$switch_tls = ."true" ]; then
-		~/.acme.sh/acme.sh --issue --nginx -d $domain_name
 
 		~/.acme.sh/acme.sh  --install-cert -d $domain_name \
 			--key-file       /etc/freeswitch/tls/privkey.pem \
