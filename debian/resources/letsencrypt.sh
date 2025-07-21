@@ -11,26 +11,19 @@ cd "$(dirname "$0")"
 #includes
 . ./config.sh
 
-#Add dependencies
-apt-get install -y curl
+if [ .$switch_tls = ."true" ]; then
 
-#remove dehyrdated letsencrypt script
-rm /usr/local/sbin/dehydrated
-rm -R /usr/src/dehydrated
-#rm -R /etc/dehydrated/
-#rm -R /usr/src/dns-01-manual
-#rm -R /var/www/dehydrated
+	#make sure the freeswitch directory exists
+	mkdir -p /etc/freeswitch/tls
+
+	#make sure the freeswitch certificate directory is empty
+	rm /etc/freeswitch/tls/*
+fi
+
 
 #request the domain name, email address and wild card domain
 read -p 'Domain Name: ' domain_name
 read -p 'Email Address: ' email_address
-
-#get and install dehydrated
-cd /usr/src && git clone https://github.com/dehydrated-io/dehydrated.git
-cd /usr/src/dehydrated
-cp dehydrated /usr/local/sbin
-mkdir -p /var/www/dehydrated
-mkdir -p /etc/dehydrated/certs
 
 #wildcard detection
 wildcard_domain=$(echo $domain_name | cut -c1-1)
@@ -40,83 +33,103 @@ else
 	wildcard_domain="false"
 fi
 
+# Get and install acme.sh
+wget -O -  https://raw.githubusercontent.com/acmesh-official/acme.sh/master/acme.sh | sh -s -- --install-online -m  $email_address
+
+if [ .$acme_challenge_type = ."dns-01" ]; then
+	letsencrypt_env_file=./letsencrypt/letsencrypt-env.sh
+
+	if [ ! -f $letsencrypt_env_file ]; then
+		error "letsencrypt env file $letsencrypt_env_file not found."
+		exit 1
+	fi
+
+	# Source env file containing dns-01 challenge secrets
+	. $letsencrypt_env_file
+
+	~/.acme.sh/acme.sh  --install-cert --dns dns_$acme_dns_provider -d $domain_name \
+		--key-file       /etc/ssl/private/nginx.key \
+		--fullchain-file /etc/ssl/certs/nginx.crt \
+		--reloadcmd     "/usr/sbin/nginx -s reload"
+
+	if [ .$switch_tls = ."true" ]; then
+		~/.acme.sh/acme.sh  --install-cert --dns dns_$acme_dns_provider -d $domain_name \
+			--key-file       /etc/freeswitch/tls/privkey.pem \
+			--cert-file		 /etc/freeswitch/tls/cert.pem \
+			--fullchain-file /etc/freeswitch/tls/fullchain.pem \
+			--ca-file		 /etc/freeswitch/tls/chain.pem
+			--reloadcmd     "cat /etc/freeswitch/tls/fullchain.pem > /etc/freeswitch/tls/all.pem && cat /etc/freeswitch/tls/privkey.pem >> /etc/freeswitch/tls/all.pem"
+	fi
+elif [ .$wildcard_domain = ."true" && .$acme_challenge_type = ."http-01" ]; then
+	verbose "Wildcard domain ist not supported by http-01 challenge, using manual dns challenge"
+
+	~/.acme.sh/acme.sh  --install-cert --dns -d $domain_name \
+		--key-file       /etc/ssl/private/nginx.key \
+		--fullchain-file /etc/ssl/certs/nginx.crt \
+		--reloadcmd     "/usr/sbin/nginx -s reload"
+
+	~/.acme.sh/acme.sh --renew -d $domain_name
+
+	if [ .$switch_tls = ."true" ]; then
+		~/.acme.sh/acme.sh  --install-cert --dns -d $domain_name \
+			--key-file       /etc/freeswitch/tls/privkey.pem \
+			--cert-file		 /etc/freeswitch/tls/cert.pem \
+			--fullchain-file /etc/freeswitch/tls/fullchain.pem \
+			--ca-file		 /etc/freeswitch/tls/chain.pem \
+			--reloadcmd     "cat /etc/freeswitch/tls/fullchain.pem > /etc/freeswitch/tls/all.pem && cat /etc/freeswitch/tls/privkey.pem >> /etc/freeswitch/tls/all.pem"
+	fi
+
+elif [ .$acme_challenge_type = ."http-01" ]; then
+	~/.acme.sh/acme.sh --install-cert --nginx -d $domain_name \
+		--key-file       /etc/ssl/private/nginx.key \
+		--fullchain-file /etc/ssl/certs/nginx.crt \
+		--reloadcmd     "/usr/sbin/nginx -s reload"
+
+	if [ .$switch_tls = ."true" ]; then
+		~/.acme.sh/acme.sh  --install-cert --nginx -d $domain_name \
+			--key-file       /etc/freeswitch/tls/privkey.pem \
+			--cert-file		 /etc/freeswitch/tls/cert.pem \
+			--fullchain-file /etc/freeswitch/tls/fullchain.pem \
+			--ca-file		 /etc/freeswitch/tls/chain.pem \
+			--reloadcmd     "cat /etc/freeswitch/tls/fullchain.pem > /etc/freeswitch/tls/all.pem && cat /etc/freeswitch/tls/privkey.pem >> /etc/freeswitch/tls/all.pem"
+	fi
+
+else
+	error "Unsupported acme challenge type $acme_challenge_type. Only dns-01 and http-01 are supported"
+	exit 1
+fi
+
+
 #remove the wildcard and period
 if [ .$wildcard_domain = ."true" ]; then
       domain_name=$(echo "$domain_name" | cut -c3-255)
 fi
 
-#manual dns hook
-if [ .$wildcard_domain = ."true" ]; then
-    cd /usr/src
-    git clone https://github.com/gheja/dns-01-manual.git
-    cd /usr/src/dns-01-manual/
-    cp hook.sh /etc/dehydrated/hook.sh
-    chmod 755 /etc/dehydrated/hook.sh
-fi
 
-#copy config and hook.sh into /etc/dehydrated
-cd /usr/src/dehydrated
-cp docs/examples/config /etc/dehydrated
-#cp docs/examples/hook.sh /etc/dehydrated
+# #set the domain alias
+# domain_alias=$(echo "$domain_name" | head -n1 | cut -d " " -f1)
 
-#update the dehydrated config
-#sed "s#CONTACT_EMAIL=#CONTACT_EMAIL=$email_address" -i /etc/dehydrated/config
-sed -i 's/#CONTACT_EMAIL=/CONTACT_EMAIL="'"$email_address"'"/g' /etc/dehydrated/config
-sed -i 's/#WELLKNOWN=/WELLKNOWN=/g' /etc/dehydrated/config
+# #create an alias when using wildcard dns
+# if [ .$wildcard_domain = ."true" ]; then
+# 	echo "*.$domain_name > $domain_name" > /etc/dehydrated/domains.txt
+# fi
 
-#accept the terms
-./dehydrated --register --accept-terms --config /etc/dehydrated/config
+# #add the domain name to domains.txt
+# if [ .$wildcard_domain = ."false" ]; then
+# 	echo "$domain_name" > /etc/dehydrated/domains.txt
+# fi
 
-#set the domain alias
-domain_alias=$(echo "$domain_name" | head -n1 | cut -d " " -f1)
+# #request the certificates
+# if [ .$wildcard_domain = ."true" ]; then
+# 	./dehydrated --cron --domain *.$domain_name --preferred-chain "ISRG Root X1" --algo rsa --alias $domain_alias --config /etc/dehydrated/config --out /etc/dehydrated/certs --challenge dns-01 --hook /etc/dehydrated/hook.sh
+# fi
+# if [ .$wildcard_domain = ."false" ]; then
+# 	./dehydrated --cron --alias $domain_alias --preferred-chain "ISRG Root X1" --algo rsa --config /etc/dehydrated/config --out /etc/dehydrated/certs --challenge http-01
+# fi
 
-#create an alias when using wildcard dns
-if [ .$wildcard_domain = ."true" ]; then
-	echo "*.$domain_name > $domain_name" > /etc/dehydrated/domains.txt
-fi
-
-#add the domain name to domains.txt
-if [ .$wildcard_domain = ."false" ]; then
-	echo "$domain_name" > /etc/dehydrated/domains.txt
-fi
-
-#request the certificates
-if [ .$wildcard_domain = ."true" ]; then
-	./dehydrated --cron --domain *.$domain_name --preferred-chain "ISRG Root X1" --algo rsa --alias $domain_alias --config /etc/dehydrated/config --out /etc/dehydrated/certs --challenge dns-01 --hook /etc/dehydrated/hook.sh
-fi
-if [ .$wildcard_domain = ."false" ]; then
-	./dehydrated --cron --alias $domain_alias --preferred-chain "ISRG Root X1" --algo rsa --config /etc/dehydrated/config --out /etc/dehydrated/certs --challenge http-01
-fi
-
-#make sure the nginx ssl directory exists
-mkdir -p /etc/nginx/ssl
-
-#update nginx config
-sed "s@ssl_certificate[ \t]*/etc/ssl/certs/nginx.crt;@ssl_certificate /etc/dehydrated/certs/$domain_alias/fullchain.pem;@g" -i /etc/nginx/sites-available/fusionpbx
-sed "s@ssl_certificate_key[ \t]*/etc/ssl/private/nginx.key;@ssl_certificate_key /etc/dehydrated/certs/$domain_alias/privkey.pem;@g" -i /etc/nginx/sites-available/fusionpbx
-
-#read the config
-/usr/sbin/nginx -t && /usr/sbin/nginx -s reload
 
 #setup freeswitch tls
 if [ .$switch_tls = ."true" ]; then
-
-	#make sure the freeswitch directory exists
-	mkdir -p /etc/freeswitch/tls
-
-	#make sure the freeswitch certificate directory is empty
-	rm /etc/freeswitch/tls/*
-
-	#combine the certs into all.pem
-	cat /etc/dehydrated/certs/$domain_alias/fullchain.pem > /etc/freeswitch/tls/all.pem
-	cat /etc/dehydrated/certs/$domain_alias/privkey.pem >> /etc/freeswitch/tls/all.pem
-	#cat /etc/dehydrated/certs/$domain_alias/chain.pem >> /etc/freeswitch/tls/all.pem
-
-	#copy the certificates
-	cp /etc/dehydrated/certs/$domain_alias/cert.pem /etc/freeswitch/tls
-	cp /etc/dehydrated/certs/$domain_alias/chain.pem /etc/freeswitch/tls
-	cp /etc/dehydrated/certs/$domain_alias/fullchain.pem /etc/freeswitch/tls
-	cp /etc/dehydrated/certs/$domain_alias/privkey.pem /etc/freeswitch/tls
 
 	#add symbolic links
 	ln -s /etc/freeswitch/tls/all.pem /etc/freeswitch/tls/agent.pem
