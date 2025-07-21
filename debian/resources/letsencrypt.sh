@@ -47,13 +47,13 @@ if [ .$acme_challenge_type = ."dns-01" ]; then
 	# Source env file containing dns-01 challenge secrets
 	. $letsencrypt_env_file
 
-	~/.acme.sh/acme.sh  --install-cert --dns dns_$acme_dns_provider -d $domain_name \
+	~/.acme.sh/acme.sh --issue --install-cert --dns dns_$acme_dns_provider -d $domain_name \
 		--key-file       /etc/ssl/private/nginx.key \
 		--fullchain-file /etc/ssl/certs/nginx.crt \
 		--reloadcmd     "/usr/sbin/nginx -s reload"
 
 	if [ .$switch_tls = ."true" ]; then
-		~/.acme.sh/acme.sh  --install-cert --dns dns_$acme_dns_provider -d $domain_name \
+		~/.acme.sh/acme.sh --issue --install-cert --dns dns_$acme_dns_provider -d $domain_name \
 			--key-file       /etc/freeswitch/tls/privkey.pem \
 			--cert-file		 /etc/freeswitch/tls/cert.pem \
 			--fullchain-file /etc/freeswitch/tls/fullchain.pem \
@@ -63,7 +63,7 @@ if [ .$acme_challenge_type = ."dns-01" ]; then
 elif [ .$wildcard_domain = ."true" && .$acme_challenge_type = ."http-01" ]; then
 	verbose "Wildcard domain ist not supported by http-01 challenge, using manual dns challenge"
 
-	~/.acme.sh/acme.sh  --install-cert --dns -d $domain_name \
+	~/.acme.sh/acme.sh  --issue --install-cert --dns -d $domain_name \
 		--key-file       /etc/ssl/private/nginx.key \
 		--fullchain-file /etc/ssl/certs/nginx.crt \
 		--reloadcmd     "/usr/sbin/nginx -s reload"
@@ -71,7 +71,7 @@ elif [ .$wildcard_domain = ."true" && .$acme_challenge_type = ."http-01" ]; then
 	~/.acme.sh/acme.sh --renew -d $domain_name
 
 	if [ .$switch_tls = ."true" ]; then
-		~/.acme.sh/acme.sh  --install-cert --dns -d $domain_name \
+		~/.acme.sh/acme.sh  --issue --install-cert --dns -d $domain_name \
 			--key-file       /etc/freeswitch/tls/privkey.pem \
 			--cert-file		 /etc/freeswitch/tls/cert.pem \
 			--fullchain-file /etc/freeswitch/tls/fullchain.pem \
