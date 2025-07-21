@@ -57,7 +57,7 @@ if [ .$acme_challenge_type = ."dns-01" ]; then
 			--key-file       /etc/freeswitch/tls/privkey.pem \
 			--cert-file		 /etc/freeswitch/tls/cert.pem \
 			--fullchain-file /etc/freeswitch/tls/fullchain.pem \
-			--ca-file		 /etc/freeswitch/tls/chain.pem
+			--ca-file		 /etc/freeswitch/tls/chain.pem \
 			--reloadcmd     "cat /etc/freeswitch/tls/fullchain.pem > /etc/freeswitch/tls/all.pem && cat /etc/freeswitch/tls/privkey.pem >> /etc/freeswitch/tls/all.pem"
 	fi
 elif [ .$wildcard_domain = ."true" && .$acme_challenge_type = ."http-01" ]; then
