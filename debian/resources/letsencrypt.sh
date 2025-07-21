@@ -51,7 +51,7 @@ if [ .$acme_challenge_type = ."dns-01" ]; then
 	~/.acme.sh/acme.sh --install-cert -d $domain_name \
 		--key-file       /etc/ssl/private/nginx.key \
 		--fullchain-file /etc/ssl/certs/nginx.crt \
-		--reloadcmd     "/usr/sbin/nginx -s reload"
+		--reloadcmd     "/usr/sbin/nginx -t && /usr/sbin/nginx -s reload"
 
 	if [ .$switch_tls = ."true" ]; then
 		~/.acme.sh/acme.sh --install-cert -d $domain_name \
